@@ -2,7 +2,7 @@ CC = gcc
 CFLAGS = -Wall -Wextra -Wpedantic -std=c11 -Iinclude
 
 TARGET = kvshell
-SOURCES = src/main.c
+SOURCES = src/main.c src/command.c src/parser.c
 
 .PHONY: all clean
 

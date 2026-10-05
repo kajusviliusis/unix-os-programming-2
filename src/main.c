@@ -5,6 +5,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "command.h"
+#include "parser.h"
+
 static int is_exit_command(const char *line)
 {
     while (isspace((unsigned char)*line)) {
@@ -47,8 +50,20 @@ int main(void)
             break;
         }
 
-        /* echo input until parsing and execution are implemented. */
-        fputs(line, stdout);
+        Command command;
+        if (parse_command(line, &command) == -1) {
+            perror("parse_command");
+            free(line);
+            return EXIT_FAILURE;
+        }
+
+        if (command.argv != NULL) {
+            for (size_t i = 0; command.argv[i] != NULL; i++) {
+                printf("arg[%zu] = %s\n", i, command.argv[i]);
+            }
+        }
+
+        free_command(&command);
     }
 
     free(line);
