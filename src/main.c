@@ -7,6 +7,7 @@
 
 #include "command.h"
 #include "parser.h"
+#include "pipeline.h"
 
 static int is_exit_command(const char *line)
 {
@@ -58,9 +59,7 @@ int main(void)
         }
 
         if (command.argv != NULL) {
-            for (size_t i = 0; command.argv[i] != NULL; i++) {
-                printf("arg[%zu] = %s\n", i, command.argv[i]);
-            }
+            execute_command(&command);
         }
 
         free_command(&command);
