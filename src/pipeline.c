@@ -31,3 +31,70 @@ int execute_command(const Command *command)
 
     return 0;
 }
+
+int execute_two_command_pipeline(const Command *commands)
+{
+    int pipe_fd[2];
+    if (pipe(pipe_fd) == -1) {
+        perror("pipe");
+        return -1;
+    }
+
+    pid_t first_pid = fork();
+    if (first_pid == -1) {
+        perror("fork");
+        close(pipe_fd[0]);
+        close(pipe_fd[1]);
+        return -1;
+    }
+
+    if (first_pid == 0) {
+        // send the first command output into the pipe.
+        if (dup2(pipe_fd[1], STDOUT_FILENO) == -1) {
+            perror("dup2");
+            _exit(1);
+        }
+        close(pipe_fd[0]);
+        close(pipe_fd[1]);
+        execvp(commands[0].argv[0], commands[0].argv);
+        perror(commands[0].argv[0]);
+        _exit(127);
+    }
+
+    pid_t second_pid = fork();
+    if (second_pid == -1) {
+        perror("fork");
+        close(pipe_fd[0]);
+        close(pipe_fd[1]);
+        waitpid(first_pid, NULL, 0);
+        return -1;
+    }
+
+    if (second_pid == 0) {
+        // read the second command input from the pipe.
+        if (dup2(pipe_fd[0], STDIN_FILENO) == -1) {
+            perror("dup2");
+            _exit(1);
+        }
+        close(pipe_fd[0]);
+        close(pipe_fd[1]);
+        execvp(commands[1].argv[0], commands[1].argv);
+        perror(commands[1].argv[0]);
+        _exit(127);
+    }
+
+    // the parent must close both ends so the reader can receive EOF.
+    close(pipe_fd[0]);
+    close(pipe_fd[1]);
+
+    int result = 0;
+    if (waitpid(first_pid, NULL, 0) == -1) {
+        perror("waitpid");
+        result = -1;
+    }
+    if (waitpid(second_pid, NULL, 0) == -1) {
+        perror("waitpid");
+        result = -1;
+    }
+    return result;
+}
