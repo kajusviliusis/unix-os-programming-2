@@ -60,3 +60,58 @@ int parse_command(const char *input, Command *command)
 
     return 0;
 }
+
+// returns 0 on success, 1 for invalid syntax, or -1 on allocation failure.
+int parse_pipeline(const char *input, Command **commands, size_t *count)
+{
+    *commands = NULL;
+    *count = 0;
+
+    size_t parts = 1;
+    for (const char *cursor = input; *cursor != '\0'; cursor++) {
+        if (*cursor == '|') {
+            parts++;
+        }
+    }
+
+    Command *parsed = calloc(parts, sizeof(*parsed));
+    if (parsed == NULL) {
+        return -1;
+    }
+
+    char *copy = malloc(strlen(input) + 1);
+    if (copy == NULL) {
+        free(parsed);
+        return -1;
+    }
+    strcpy(copy, input);
+
+    // split at each pipe, then parse the text between pipes as a command.
+    char *segment = copy;
+    for (size_t i = 0; i < parts; i++) {
+        char *pipe_pos = strchr(segment, '|');
+        if (pipe_pos != NULL) {
+            *pipe_pos = '\0';
+        }
+
+        if (parse_command(segment, &parsed[i]) == -1) {
+            free(copy);
+            free_commands(parsed, parts);
+            return -1;
+        }
+        if (parts > 1 && parsed[i].argv == NULL) {
+            free(copy);
+            free_commands(parsed, parts);
+            return 1;
+        }
+
+        if (pipe_pos != NULL) {
+            segment = pipe_pos + 1;
+        }
+    }
+
+    free(copy);
+    *commands = parsed;
+    *count = parts;
+    return 0;
+}

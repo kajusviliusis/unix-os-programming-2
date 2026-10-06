@@ -16,3 +16,11 @@ void free_command(Command *command)
     free(command->argv);
     command->argv = NULL;
 }
+
+void free_commands(Command *commands, size_t count)
+{
+    for (size_t i = 0; i < count; i++) {
+        free_command(&commands[i]);
+    }
+    free(commands);
+}

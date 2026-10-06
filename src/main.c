@@ -51,18 +51,31 @@ int main(void)
             break;
         }
 
-        Command command;
-        if (parse_command(line, &command) == -1) {
-            perror("parse_command");
+        Command *commands;
+        size_t count;
+        int result = parse_pipeline(line, &commands, &count);
+        if (result == -1) {
+            perror("parse_pipeline");
             free(line);
             return EXIT_FAILURE;
         }
-
-        if (command.argv != NULL) {
-            execute_command(&command);
+        if (result == 1) {
+            fputs("Invalid pipeline\n", stderr);
+            continue;
         }
 
-        free_command(&command);
+        if (count == 1 && commands[0].argv != NULL) {
+            execute_command(&commands[0]);
+        } else if (count > 1) {
+            for (size_t i = 0; i < count; i++) {
+                printf("Command %zu:\n", i);
+                for (size_t j = 0; commands[i].argv[j] != NULL; j++) {
+                    printf("  %s\n", commands[i].argv[j]);
+                }
+            }
+        }
+
+        free_commands(commands, count);
     }
 
     free(line);
