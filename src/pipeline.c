@@ -7,6 +7,14 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+static void close_pipes(int pipes[][2], size_t pipe_count)
+{
+    for (size_t i = 0; i < pipe_count; i++) {
+        close(pipes[i][0]);
+        close(pipes[i][1]);
+    }
+}
+
 int execute_command(const Command *command)
 {
     pid_t pid = fork();
@@ -32,69 +40,62 @@ int execute_command(const Command *command)
     return 0;
 }
 
-int execute_two_command_pipeline(const Command *commands)
+int execute_pipeline(const Command *commands, size_t count)
 {
-    int pipe_fd[2];
-    if (pipe(pipe_fd) == -1) {
-        perror("pipe");
+    if (count < 2) {
         return -1;
     }
 
-    pid_t first_pid = fork();
-    if (first_pid == -1) {
-        perror("fork");
-        close(pipe_fd[0]);
-        close(pipe_fd[1]);
-        return -1;
-    }
+    size_t pipe_count = count - 1;
+    int pipes[pipe_count][2];
+    pid_t pids[count];
 
-    if (first_pid == 0) {
-        // send the first command output into the pipe.
-        if (dup2(pipe_fd[1], STDOUT_FILENO) == -1) {
-            perror("dup2");
-            _exit(1);
+    for (size_t i = 0; i < pipe_count; i++) {
+        if (pipe(pipes[i]) == -1) {
+            perror("pipe");
+            close_pipes(pipes, i);
+            return -1;
         }
-        close(pipe_fd[0]);
-        close(pipe_fd[1]);
-        execvp(commands[0].argv[0], commands[0].argv);
-        perror(commands[0].argv[0]);
-        _exit(127);
     }
 
-    pid_t second_pid = fork();
-    if (second_pid == -1) {
-        perror("fork");
-        close(pipe_fd[0]);
-        close(pipe_fd[1]);
-        waitpid(first_pid, NULL, 0);
-        return -1;
-    }
-
-    if (second_pid == 0) {
-        // read the second command input from the pipe.
-        if (dup2(pipe_fd[0], STDIN_FILENO) == -1) {
-            perror("dup2");
-            _exit(1);
+    for (size_t i = 0; i < count; i++) {
+        pids[i] = fork();
+        if (pids[i] == -1) {
+            perror("fork");
+            close_pipes(pipes, pipe_count);
+            for (size_t j = 0; j < i; j++) {
+                waitpid(pids[j], NULL, 0);
+            }
+            return -1;
         }
-        close(pipe_fd[0]);
-        close(pipe_fd[1]);
-        execvp(commands[1].argv[0], commands[1].argv);
-        perror(commands[1].argv[0]);
-        _exit(127);
+
+        if (pids[i] == 0) {
+            // middle commands read from the previous pipe and write to the next.
+            if (i > 0 && dup2(pipes[i - 1][0], STDIN_FILENO) == -1) {
+                perror("dup2");
+                _exit(1);
+            }
+            if (i < pipe_count && dup2(pipes[i][1], STDOUT_FILENO) == -1) {
+                perror("dup2");
+                _exit(1);
+            }
+
+            // close unused pipe ends so readers can get EOF.
+            close_pipes(pipes, pipe_count);
+            execvp(commands[i].argv[0], commands[i].argv);
+            perror(commands[i].argv[0]);
+            _exit(127);
+        }
     }
 
-    // the parent must close both ends so the reader can receive EOF.
-    close(pipe_fd[0]);
-    close(pipe_fd[1]);
+    close_pipes(pipes, pipe_count);
 
     int result = 0;
-    if (waitpid(first_pid, NULL, 0) == -1) {
-        perror("waitpid");
-        result = -1;
-    }
-    if (waitpid(second_pid, NULL, 0) == -1) {
-        perror("waitpid");
-        result = -1;
+    for (size_t i = 0; i < count; i++) {
+        if (waitpid(pids[i], NULL, 0) == -1) {
+            perror("waitpid");
+            result = -1;
+        }
     }
     return result;
 }

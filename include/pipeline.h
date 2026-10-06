@@ -4,6 +4,6 @@
 #include "command.h"
 
 int execute_command(const Command *command);
-int execute_two_command_pipeline(const Command *commands);
+int execute_pipeline(const Command *commands, size_t count);
 
 #endif

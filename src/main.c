@@ -66,15 +66,8 @@ int main(void)
 
         if (count == 1 && commands[0].argv != NULL) {
             execute_command(&commands[0]);
-        } else if (count == 2) {
-            execute_two_command_pipeline(commands);
-        } else if (count > 2) {
-            for (size_t i = 0; i < count; i++) {
-                printf("Command %zu:\n", i);
-                for (size_t j = 0; commands[i].argv[j] != NULL; j++) {
-                    printf("  %s\n", commands[i].argv[j]);
-                }
-            }
+        } else if (count > 1) {
+            execute_pipeline(commands, count);
         }
 
         free_commands(commands, count);
